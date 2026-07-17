@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>姨妈助手 · 周期追踪</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    :root {
+      --rose-50: #fff1f2;
+      --rose-100: #ffe4e6;
+      --rose-200: #fecdd3;
+      --rose-300: #fda4af;
+      --rose-400: #fb7185;
+      --rose-500: #f43f5e;
+      --rose-600: #e11d48;
+      --rose-700: #be123c;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --radius: 1rem;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, var(--rose-50) 0%, #ffffff 100%);
+      color: var(--gray-800);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--rose-700);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    header h1 .logo {
+      font-size: 1.75rem;
+    }
+
+    .user-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--gray-600);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      border: none;
+      border-radius: 0.625rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.9375rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
+      line-height: 1.25;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: var(--rose-500);
+      color: #fff;
+      box-shadow: 0 2px 0 var(--rose-700);
+    }
+
+    .btn-primary:hover {
+      background: var(--rose-600);
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: var(--rose-600);
+      border: 1px solid var(--rose-200);
+    }
+
+    .btn-secondary:hover {
+      background: var(--rose-50);
+    }
+
+    .btn-danger {
+      background: #fff;
+      color: var(--rose-600);
+      border: 1px solid var(--rose-200);
+    }
+
+    .btn-danger:hover {
+      background: var(--rose-50);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .calendar-header h2 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin: 0;
+      color: var(--gray-800);
+    }
+
+    .calendar-nav {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .calendar-nav button {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 0.625rem;
+      background: var(--rose-50);
+      color: var(--rose-700);
+      border: 1px solid var(--rose-100);
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .calendar-nav button:hover {
+      background: var(--rose-100);
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.375rem;
+    }
+
+    .weekday-label {
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      padding: 0.5rem 0;
+    }
+
+    .calendar-day {
+      aspect-ratio: 1 / 1;
+      border-radius: 0.875rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0.375rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: var(--gray-50);
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+      position: relative;
+      min-height: 0;
+    }
+
+    .calendar-day:hover {
+      background: var(--rose-50);
+    }
+
+    .calendar-day.selected {
+      border: 2px solid var(--rose-500);
+      background: #fff;
+    }
+
+    .calendar-day.today {
+      box-shadow: 0 0 0 2px var(--rose-400) inset;
+    }
+
+    .calendar-day.period {
+      background: var(--rose-300);
+      color: var(--rose-900);
+    }
+
+    .calendar-day.period-start {
+      background: var(--rose-500);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .calendar-day.predicted {
+      border: 1px dashed var(--rose-300);
+      background: var(--rose-50);
+    }
+
+    .calendar-day.other-month {
+      color: var(--gray-300);
+      background: transparent;
+    }
+
+    .calendar-day .day-number {
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: 1;
+      margin-bottom: 0.25rem;
+    }
+
+    .calendar-day .indicators {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.125rem;
+      max-width: 100%;
+    }
+
+    .calendar-day .dot {
+      width: 0.35rem;
+      height: 0.35rem;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-temperature { background: #f97316; }
+    .dot-symptoms { background: #a855f7; }
+    .dot-love { background: #ec4899; }
+    .dot-air { background: #14b8a6; }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 0.875rem 1rem;
+      text-align: center;
+    }
+
+    .stat-card .label {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+      margin-bottom: 0.25rem;
+    }
+
+    .stat-card .value {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--rose-600);
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--gray-700);
+      margin: 0 0 0.75rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .selected-date {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--rose-600);
+      margin-bottom: 0.75rem;
+      text-align: center;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(1, 1fr);
+      gap: 0.875rem;
+    }
+
+    @media (min-width: 640px) {
+      .module-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .module {
+      background: var(--gray-50);
+      border-radius: 0.875rem;
+      padding: 0.875rem;
+      border: 1px solid var(--gray-100);
+    }
+
+    .module.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .module h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin: 0 0 0.625rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .module-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .module-actions .btn {
+      flex: 1;
+      min-width: 6rem;
+    }
+
+    .toggle-btn {
+      flex: 1;
+    }
+
+    .toggle-btn.active {
+      background: var(--rose-500);
+      color: #fff;
+    }
+
+    .input-field {
+      width: 100%;
+      border: 1px solid var(--gray-200);
+      border-radius: 0.625rem;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.9375rem;
+      color: var(--gray-800);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .input-field:focus {
+      border-color: var(--rose-400);
+      box-shadow: 0 0 0 3px var(--rose-100);
+    }
+
+    .input-field::placeholder {
+      color: var(--gray-400);
+    }
+
+    select.input-field {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      padding-right: 2.25rem;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .checkbox-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-radius: 9999px;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .checkbox-pill input {
+      display: none;
+    }
+
+    .checkbox-pill.checked {
+      background: var(--rose-500);
+      color: #fff;
+      border-color: var(--rose-500);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.55);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 1rem;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 1.25rem;
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 400px;
+      padding: 1.5rem;
+      animation: modal-in 0.2s ease;
+    }
+
+    @keyframes modal-in {
+      from { opacity: 0; transform: translateY(1rem); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .modal h2 {
+      margin: 0 0 0.25rem 0;
+      font-size: 1.25rem;
+      color: var(--rose-700);
+    }
+
+    .modal p {
+      margin: 0 0 1.25rem 0;
+      color: var(--gray-500);
+      font-size: 0.875rem;
+    }
+
+    .form-group {
+      margin-bottom: 0.875rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--gray-600);
+      margin-bottom: 0.375rem;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+
+    .form-actions .btn {
+      flex: 1;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 0.625rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      border: 1px solid var(--gray-200);
+      background: #fff;
+      color: var(--gray-600);
+    }
+
+    .tab.active {
+      background: var(--rose-500);
+      color: #fff;
+      border-color: var(--rose-500);
+    }
+
+    .message {
+      padding: 0.875rem 1rem;
+      border-radius: 0.875rem;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+
+    .message.info {
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+
+    .message.error {
+      background: #fff1f2;
+      color: #be123c;
+      border: 1px solid var(--rose-200);
+    }
+
+    .message.success {
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    .setup-code {
+      background: var(--gray-900);
+      color: #f9fafb;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      white-space: pre;
+      margin-top: 0.75rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      margin-top: 0.75rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .legend-box {
+      width: 0.875rem;
+      height: 0.875rem;
+      border-radius: 0.25rem;
+    }
+
+    .legend-ring {
+      box-shadow: 0 0 0 2px var(--rose-400) inset;
+    }
+
+    .spinner {
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span class="logo">🌸</span> 姨妈助手</h1>
+      <div class="user-bar" id="user-bar">
+        <span id="user-email"></span>
+        <button id="logout-btn" class="btn btn-danger hidden">退出</button>
+      </div>
+    </header>
+
+    <div id="setup-message" class="message info hidden">
+      <strong>欢迎使用姨妈助手！</strong><br/>
+      请先替换页面顶部 JavaScript 中的 <code>SUPABASE_URL</code> 和 <code>SUPABASE_ANON_KEY</code> 为你的 Supabase 项目凭证。
+      <details>
+        <summary style="cursor: pointer; margin-top: 0.5rem; font-weight: 600;">点击查看数据库初始化 SQL</summary>
+        <pre class="setup-code">-- 在 Supabase SQL 编辑器中执行
+
+create table if not exists public.daily_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  date date not null,
+  is_period boolean default false,
+  period_start boolean default false,
+  period_end boolean default false,
+  flow text,
+  temperature numeric(4,2),
+  symptoms text[] default '{}',
+  love boolean default false,
+  air text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (user_id, date)
+);
+
+-- 行级安全策略
+alter table public.daily_logs enable row level security;
+
+create policy "用户只能查看自己的记录"
+  on public.daily_logs
+  for select
+  using (auth.uid() = user_id);
+
+create policy "用户只能插入自己的记录"
+  on public.daily_logs
+  for insert
+  with check (auth.uid() = user_id);
+
+create policy "用户只能更新自己的记录"
+  on public.daily_logs
+  for update
+  using (auth.uid() = user_id);
+
+create policy "用户只能删除自己的记录"
+  on public.daily_logs
+  for delete
+  using (auth.uid() = user_id);</pre>
+      </details>
+    </div>
+
+    <div id="auth-message" class="message info hidden">
+      请登录或注册以同步你的记录。数据会安全保存在你的 Supabase 账户中。
+    </div>
+
+    <div id="status-message" class="message hidden"></div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">预测下次姨妈</div>
+        <div class="value" id="predicted-next">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">平均周期</div>
+        <div class="value" id="avg-cycle">-- 天</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="calendar-header">
+        <h2 id="calendar-month">2024年 1月</h2>
+        <div class="calendar-nav">
+          <button id="prev-month" aria-label="上个月">‹</button>
+          <button id="next-month" aria-label="下个月">›</button>
+        </div>
+      </div>
+      <div class="calendar-grid" id="calendar-grid">
+        <!-- JS renders calendar -->
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-box" style="background: var(--rose-300);"></div> 已记录经期</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--rose-500);"></div> 经期开始</div>
+        <div class="legend-item"><div class="legend-box" style="border: 1px dashed var(--rose-300); background: var(--rose-50);"></div> 预测经期</div>
+        <div class="legend-item"><div class="legend-box legend-ring"></div> 今天</div>
+      </div>
+    </div>
+
+    <div id="editor" class="card">
+      <div class="selected-date" id="selected-date">请选择一天</div>
+
+      <div class="module-grid">
+        <div class="module full-width">
+          <h3>🩸 经期状态</h3>
+          <div class="module-actions">
+            <button id="btn-period-start" class="btn btn-secondary toggle-btn">来M了</button>
+            <button id="btn-period-end" class="btn btn-secondary toggle-btn">姨妈走了</button>
+          </div>
+        </div>
+
+        <div class="module">
+          <h3>🌡️ 体温</h3>
+          <input id="input-temperature" type="number" step="0.01" class="input-field" placeholder="例如 36.5" />
+        </div>
+
+        <div class="module">
+          <h3>💧 流量</h3>
+          <select id="input-flow" class="input-field">
+            <option value="">-- 选择 --</option>
+            <option value="点滴出血">点滴出血</option>
+            <option value="少量">少量</option>
+            <option value="中等">中等</option>
+            <option value="大量">大量</option>
+          </select>
+        </div>
+
+        <div class="module full-width">
+          <h3>😣 症状</h3>
+          <div class="checkbox-group" id="symptoms-group">
+            <label class="checkbox-pill"><input type="checkbox" value="痛经" />痛经</label>
+            <label class="checkbox-pill"><input type="checkbox" value="头痛" />头痛</label>
+            <label class="checkbox-pill"><input type="checkbox" value="腹胀" />腹胀</label>
+            <label class="checkbox-pill"><input type="checkbox" value="长痘" />长痘</label>
+            <label class="checkbox-pill"><input type="checkbox" value="情绪波动" />情绪波动</label>
+            <label class="checkbox-pill"><input type="checkbox" value="疲劳" />疲劳</label>
+            <label class="checkbox-pill"><input type="checkbox" value="乳房胀痛" />乳房胀痛</label>
+            <label class="checkbox-pill"><input type="checkbox" value="腰酸" />腰酸</label>
+          </div>
+        </div>
+
+        <div class="module">
+          <h3>❤️ Love</h3>
+          <button id="btn-love" class="btn btn-secondary toggle-btn">记录</button>
+        </div>
+
+        <div class="module">
+          <h3>✨ Air / 自定义</h3>
+          <!-- Air 是自定义字段，用户可稍后重命名，用于记录运动、睡眠、空气、心情等 -->
+          <input id="input-air" type="text" class="input-field" placeholder="运动、睡眠、空气、心情" />
+        </div>
+
+        <div class="module full-width">
+          <h3>📝 备注</h3>
+          <textarea id="input-notes" class="input-field" rows="3" placeholder="今天还有什么想记录的？"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="auth-overlay" class="overlay">
+    <div class="modal">
+      <h2>🔐 登录 / 注册</h2>
+      <p>使用邮箱和密码登录或注册新账号</p>
+      <div class="tabs">
+        <button class="tab active" data-mode="login">登录</button>
+        <button class="tab" data-mode="signup">注册</button>
+      </div>
+      <form id="auth-form">
+        <div class="form-group">
+          <label for="auth-email">邮箱</label>
+          <input id="auth-email" type="email" class="input-field" placeholder="you@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="auth-password">密码</label>
+          <input id="auth-password" type="password" class="input-field" placeholder="至少 6 位" minlength="6" required />
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="auth-submit">登录</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ============================
+    // 配置：请替换为你的 Supabase 项目凭证
+    // ============================
+    const SUPABASE_URL = 'https://jtittpzxdzjkdkfaugxj.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_hsXtj25cVrweKPgnvoyN_Q_Y1-EwGf4';
+
+    // ============================
+    // 应用状态
+    // ============================
+    const isConfigured = SUPABASE_URL && SUPABASE_ANON_KEY &&
+      !SUPABASE_URL.includes('your-project') &&
+      !SUPABASE_ANON_KEY.includes('your-anon-key');
+
+    const supabaseClient = isConfigured
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    const state = {
+      user: null,
+      currentDate: new Date(),
+      selectedDate: formatDate(new Date()),
+      logs: new Map(), // key: 'YYYY-MM-DD', value: daily log object
+      authMode: 'login', // 'login' | 'signup'
+    };
+
+    const symptomsList = ['痛经', '头痛', '腹胀', '长痘', '情绪波动', '疲劳', '乳房胀痛', '腰酸'];
+
+    // DOM 元素
+    const els = {
+      setupMessage: document.getElementById('setup-message'),
+      authMessage: document.getElementById('auth-message'),
+      statusMessage: document.getElementById('status-message'),
+      userBar: document.getElementById('user-bar'),
+      userEmail: document.getElementById('user-email'),
+      logoutBtn: document.getElementById('logout-btn'),
+      authOverlay: document.getElementById('auth-overlay'),
+      authForm: document.getElementById('auth-form'),
+      authEmail: document.getElementById('auth-email'),
+      authPassword: document.getElementById('auth-password'),
+      authSubmit: document.getElementById('auth-submit'),
+      tabs: document.querySelectorAll('.tab'),
+      calendarMonth: document.getElementById('calendar-month'),
+      calendarGrid: document.getElementById('calendar-grid'),
+      prevMonth: document.getElementById('prev-month'),
+      nextMonth: document.getElementById('next-month'),
+      selectedDate: document.getElementById('selected-date'),
+      predictedNext: document.getElementById('predicted-next'),
+      avgCycle: document.getElementById('avg-cycle'),
+      btnPeriodStart: document.getElementById('btn-period-start'),
+      btnPeriodEnd: document.getElementById('btn-period-end'),
+      inputTemperature: document.getElementById('input-temperature'),
+      inputFlow: document.getElementById('input-flow'),
+      symptomsGroup: document.getElementById('symptoms-group'),
+      btnLove: document.getElementById('btn-love'),
+      inputAir: document.getElementById('input-air'),
+      inputNotes: document.getElementById('input-notes'),
+    };
+
+    // ============================
+    // 初始化
+    // ============================
+    function init() {
+      if (!isConfigured) {
+        els.setupMessage.classList.remove('hidden');
+        els.authOverlay.classList.add('hidden');
+      } else {
+        els.setupMessage.classList.add('hidden');
+        checkSession();
+      }
+
+      renderSymptomsPills();
+      renderCalendar();
+      renderEditor();
+      bindEvents();
+    }
+
+    function renderSymptomsPills() {
+      els.symptomsGroup.innerHTML = '';
+      symptomsList.forEach(sym => {
+        const label = document.createElement('label');
+        label.className = 'checkbox-pill';
+        label.innerHTML = `<input type="checkbox" value="${sym}" />${sym}`;
+        label.addEventListener('change', (e) => {
+          if (e.target.tagName !== 'INPUT') return;
+          label.classList.toggle('checked', e.target.checked);
+        });
+        els.symptomsGroup.appendChild(label);
+      });
+    }
+
+    // ============================
+    // 事件绑定
+    // ============================
+    function bindEvents() {
+      els.prevMonth.addEventListener('click', () => changeMonth(-1));
+      els.nextMonth.addEventListener('click', () => changeMonth(1));
+
+      els.logoutBtn.addEventListener('click', logout);
+
+      els.tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          els.tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          state.authMode = tab.dataset.mode;
+          els.authSubmit.textContent = state.authMode === 'login' ? '登录' : '注册';
+        });
+      });
+
+      els.authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await authSubmit();
+      });
+
+      els.btnPeriodStart.addEventListener('click', () => {
+        const log = getOrCreateLog(state.selectedDate);
+        log.is_period = !log.is_period;
+        log.period_start = log.is_period;
+        if (!log.is_period) log.period_end = false;
+        updateStateMap(log);
+        renderEditor();
+        renderCalendar();
+        saveSelectedDay();
+      });
+
+      els.btnPeriodEnd.addEventListener('click', () => {
+        const log = getOrCreateLog(state.selectedDate);
+        log.is_period = false;
+        log.period_end = true;
+        log.period_start = false;
+        updateStateMap(log);
+        renderEditor();
+        renderCalendar();
+        saveSelectedDay();
+      });
+
+      els.btnLove.addEventListener('click', () => {
+        const log = getOrCreateLog(state.selectedDate);
+        log.love = !log.love;
+        updateStateMap(log);
+        renderEditor();
+        renderCalendar();
+        saveSelectedDay();
+      });
+
+      [els.inputTemperature, els.inputFlow, els.inputAir, els.inputNotes].forEach(el => {
+        el.addEventListener('change', () => {
+          const log = getOrCreateLog(state.selectedDate);
+          if (el === els.inputTemperature) log.temperature = parseFloat(el.value) || null;
+          if (el === els.inputFlow) log.flow = el.value || null;
+          if (el === els.inputAir) log.air = el.value || null;
+          if (el === els.inputNotes) log.notes = el.value || null;
+          updateStateMap(log);
+          renderCalendar();
+          saveSelectedDay();
+        });
+      });
+    }
+
+    // ============================
+    // 认证
+    // ============================
+    async function checkSession() {
+      if (!supabaseClient) return;
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      if (error) {
+        showStatus(error.message, 'error');
+        return;
+      }
+      if (session) {
+        state.user = session.user;
+        onAuthSuccess();
+      } else {
+        state.user = null;
+        els.authOverlay.classList.remove('hidden');
+      }
+    }
+
+    async function authSubmit() {
+      const email = els.authEmail.value.trim();
+      const password = els.authPassword.value;
+      if (!email || !password) return;
+
+      setAuthLoading(true);
+      try {
+        let result;
+        if (state.authMode === 'login') {
+          result = await supabaseClient.auth.signInWithPassword({ email, password });
+        } else {
+          result = await supabaseClient.auth.signUp({ email, password });
+        }
+        if (result.error) throw result.error;
+        state.user = result.data.user || result.data.session?.user;
+        onAuthSuccess();
+      } catch (err) {
+        showStatus(err.message || '认证失败', 'error');
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+
+    async function logout() {
+      if (!supabaseClient) return;
+      await supabaseClient.auth.signOut();
+      state.user = null;
+      state.logs.clear();
+      els.authOverlay.classList.remove('hidden');
+      els.logoutBtn.classList.add('hidden');
+      els.userEmail.textContent = '';
+      els.authMessage.classList.add('hidden');
+      renderCalendar();
+      renderEditor();
+      showStatus('已退出登录', 'info');
+    }
+
+    function onAuthSuccess() {
+      els.authOverlay.classList.add('hidden');
+      els.logoutBtn.classList.remove('hidden');
+      els.userEmail.textContent = state.user?.email || '';
+      els.authMessage.classList.remove('hidden');
+      fetchLogs();
+    }
+
+    function setAuthLoading(loading) {
+      els.authSubmit.disabled = loading;
+      els.authSubmit.innerHTML = loading ? '<span class="spinner"></span>' : (state.authMode === 'login' ? '登录' : '注册');
+    }
+
+    // ============================
+    // 数据获取与保存
+    // ============================
+    async function fetchLogs() {
+      if (!supabaseClient || !state.user) return;
+      const { data, error } = await supabaseClient
+        .from('daily_logs')
+        .select('*')
+        .eq('user_id', state.user.id);
+      if (error) {
+        showStatus('读取记录失败：' + error.message, 'error');
+        return;
+      }
+      state.logs.clear();
+      (data || []).forEach(log => {
+        state.logs.set(log.date, normalizeLog(log));
+      });
+      renderCalendar();
+      renderEditor();
+      updateStats();
+    }
+
+    async function saveSelectedDay() {
+      if (!supabaseClient || !state.user) return;
+      const log = state.logs.get(state.selectedDate) || createEmptyLog(state.selectedDate);
+      const payload = {
+        user_id: state.user.id,
+        date: log.date,
+        is_period: log.is_period,
+        period_start: log.period_start,
+        period_end: log.period_end,
+        flow: log.flow,
+        temperature: log.temperature,
+        symptoms: log.symptoms || [],
+        love: log.love,
+        air: log.air,
+        notes: log.notes,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabaseClient
+        .from('daily_logs')
+        .upsert(payload, { onConflict: 'user_id,date' });
+      if (error) {
+        showStatus('保存失败：' + error.message, 'error');
+      } else {
+        updateStats();
+      }
+    }
+
+    function createEmptyLog(date) {
+      return {
+        date,
+        is_period: false,
+        period_start: false,
+        period_end: false,
+        flow: null,
+        temperature: null,
+        symptoms: [],
+        love: false,
+        air: null,
+        notes: null,
+      };
+    }
+
+    function normalizeLog(log) {
+      return {
+        ...createEmptyLog(log.date),
+        ...log,
+        symptoms: Array.isArray(log.symptoms) ? log.symptoms : [],
+      };
+    }
+
+    function getOrCreateLog(date) {
+      if (!state.logs.has(date)) {
+        state.logs.set(date, createEmptyLog(date));
+      }
+      return state.logs.get(date);
+    }
+
+    function updateStateMap(log) {
+      state.logs.set(log.date, log);
+    }
+
+    // ============================
+    // 日历
+    // ============================
+    function changeMonth(delta) {
+      const y = state.currentDate.getFullYear();
+      const m = state.currentDate.getMonth();
+      state.currentDate = new Date(y, m + delta, 1);
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const year = state.currentDate.getFullYear();
+      const month = state.currentDate.getMonth();
+      els.calendarMonth.textContent = `${year}年 ${month + 1}月`;
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startOffset = firstDay.getDay(); // 0=Sun
+      const daysInMonth = lastDay.getDate();
+      const prevMonthDays = new Date(year, month, 0).getDate();
+      const today = formatDate(new Date());
+
+      const predictedSet = buildPredictedSet();
+
+      els.calendarGrid.innerHTML = '';
+
+      const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+      weekdays.forEach(day => {
+        const el = document.createElement('div');
+        el.className = 'weekday-label';
+        el.textContent = day;
+        els.calendarGrid.appendChild(el);
+      });
+
+      // 上月填充
+      for (let i = startOffset - 1; i >= 0; i--) {
+        const day = prevMonthDays - i;
+        const date = formatDate(new Date(year, month - 1, day));
+        els.calendarGrid.appendChild(createDayCell(date, day, true));
+      }
+
+      // 当月
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = formatDate(new Date(year, month, day));
+        els.calendarGrid.appendChild(createDayCell(date, day, false, today, predictedSet));
+      }
+
+      // 下月填充
+      const remaining = (7 - ((startOffset + daysInMonth) % 7)) % 7;
+      for (let day = 1; day <= remaining; day++) {
+        const date = formatDate(new Date(year, month + 1, day));
+        els.calendarGrid.appendChild(createDayCell(date, day, true));
+      }
+    }
+
+    function createDayCell(date, day, otherMonth, today, predictedSet) {
+      const log = state.logs.get(date) || createEmptyLog(date);
+      const cell = document.createElement('div');
+      cell.className = 'calendar-day';
+      if (otherMonth) cell.classList.add('other-month');
+      if (date === state.selectedDate) cell.classList.add('selected');
+      if (date === today) cell.classList.add('today');
+      if (predictedSet && predictedSet.has(date)) cell.classList.add('predicted');
+      if (log.is_period) cell.classList.add('period');
+      if (log.period_start) cell.classList.add('period-start');
+
+      const number = document.createElement('div');
+      number.className = 'day-number';
+      number.textContent = day;
+      cell.appendChild(number);
+
+      const indicators = document.createElement('div');
+      indicators.className = 'indicators';
+      if (log.temperature) indicators.appendChild(createDot('temperature'));
+      if (log.symptoms && log.symptoms.length) indicators.appendChild(createDot('symptoms'));
+      if (log.love) indicators.appendChild(createDot('love'));
+      if (log.air) indicators.appendChild(createDot('air'));
+      cell.appendChild(indicators);
+
+      cell.addEventListener('click', () => {
+        state.selectedDate = date;
+        renderCalendar();
+        renderEditor();
+      });
+
+      return cell;
+    }
+
+    function createDot(type) {
+      const dot = document.createElement('div');
+      dot.className = `dot dot-${type}`;
+      return dot;
+    }
+
+    // ============================
+    // 编辑器
+    // ============================
+    function renderEditor() {
+      const date = state.selectedDate;
+      const [y, m, d] = date.split('-').map(Number);
+      els.selectedDate.textContent = `${y}年${m}月${d}日`;
+
+      const log = getOrCreateLog(date);
+
+      els.btnPeriodStart.classList.toggle('active', log.is_period || log.period_start);
+      els.btnPeriodEnd.classList.toggle('active', log.period_end);
+      els.inputTemperature.value = log.temperature ?? '';
+      els.inputFlow.value = log.flow || '';
+      els.btnLove.classList.toggle('active', log.love);
+      els.inputAir.value = log.air || '';
+      els.inputNotes.value = log.notes || '';
+
+      const pills = els.symptomsGroup.querySelectorAll('.checkbox-pill');
+      pills.forEach(pill => {
+        const cb = pill.querySelector('input');
+        cb.checked = (log.symptoms || []).includes(cb.value);
+        pill.classList.toggle('checked', cb.checked);
+      });
+    }
+
+    // 症状 checkbox 绑定保存
+    els.symptomsGroup.addEventListener('change', () => {
+      const checked = Array.from(els.symptomsGroup.querySelectorAll('input:checked')).map(cb => cb.value);
+      const log = getOrCreateLog(state.selectedDate);
+      log.symptoms = checked;
+      updateStateMap(log);
+      renderCalendar();
+      saveSelectedDay();
+    });
+
+    // ============================
+    // 预测
+    // ============================
+    function buildPredictedSet() {
+      const predictedSet = new Set();
+      const starts = getPeriodStartDates();
+      if (starts.length < 1) return predictedSet;
+      const avg = averageCycleLength(starts);
+      const lastStart = starts[0];
+      const nextStart = addDays(lastStart, avg);
+      for (let i = 0; i < 5; i++) {
+        predictedSet.add(addDays(nextStart, i));
+      }
+      return predictedSet;
+    }
+
+    function updateStats() {
+      const starts = getPeriodStartDates();
+      if (starts.length < 1) {
+        els.predictedNext.textContent = '--';
+        els.avgCycle.textContent = '-- 天';
+        return;
+      }
+      const avg = averageCycleLength(starts);
+      const lastStart = starts[0];
+      const nextStart = addDays(lastStart, avg);
+      els.predictedNext.textContent = formatDisplayDate(nextStart);
+      els.avgCycle.textContent = `${Math.round(avg)} 天`;
+    }
+
+    function getPeriodStartDates() {
+      const dates = [];
+      state.logs.forEach(log => {
+        if (log.period_start && log.date) dates.push(log.date);
+      });
+      return dates.sort().reverse();
+    }
+
+    function averageCycleLength(sortedStartsDesc) {
+      if (sortedStartsDesc.length < 2) return 28;
+      let total = 0;
+      let count = 0;
+      for (let i = 0; i < sortedStartsDesc.length - 1; i++) {
+        const days = diffDays(sortedStartsDesc[i + 1], sortedStartsDesc[i]);
+        if (days > 0 && days < 90) {
+          total += days;
+          count++;
+        }
+      }
+      return count > 0 ? total / count : 28;
+    }
+
+    // ============================
+    // 工具函数
+    // ============================
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatDisplayDate(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return `${m}月${d}日`;
+    }
+
+    function addDays(dateStr, n) {
+      const d = new Date(dateStr + 'T00:00:00');
+      d.setDate(d.getDate() + n);
+      return formatDate(d);
+    }
+
+    function diffDays(a, b) {
+      const da = new Date(a + 'T00:00:00');
+      const db = new Date(b + 'T00:00:00');
+      return Math.round((db - da) / (1000 * 60 * 60 * 24));
+    }
+
+    function showStatus(message, type) {
+      els.statusMessage.textContent = message;
+      els.statusMessage.className = `message ${type}`;
+      setTimeout(() => {
+        els.statusMessage.className = 'message hidden';
+      }, 4000);
+    }
+
+    // 启动
+    init();
+  </script>
+
+  <!--
+  ============================================================
+  Supabase 数据库初始化 SQL（在 Supabase SQL 编辑器中执行）
+  ============================================================
+
+  create table if not exists public.daily_logs (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references auth.users(id) on delete cascade,
+    date date not null,
+    is_period boolean default false,
+    period_start boolean default false,
+    period_end boolean default false,
+    flow text,
+    temperature numeric(4,2),
+    symptoms text[] default '{}',
+    love boolean default false,
+    air text,
+    notes text,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now(),
+    unique (user_id, date)
+  );
+
+  alter table public.daily_logs enable row level security;
+
+  create policy "用户只能查看自己的记录"
+    on public.daily_logs
+    for select
+    using (auth.uid() = user_id);
+
+  create policy "用户只能插入自己的记录"
+    on public.daily_logs
+    for insert
+    with check (auth.uid() = user_id);
+
+  create policy "用户只能更新自己的记录"
+    on public.daily_logs
+    for update
+    using (auth.uid() = user_id);
+
+  create policy "用户只能删除自己的记录"
+    on public.daily_logs
+    for delete
+    using (auth.uid() = user_id);
+  -->
+</body>
+</html>
