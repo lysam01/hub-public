@@ -591,6 +591,60 @@
     .hidden {
       display: none !important;
     }
+.settings-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  color: var(--rose-600);
+  border-radius: 0.5rem;
+}
+.settings-btn:hover {
+  background: var(--rose-100);
+}
+.big-toggle {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  font-size: 2rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.big-toggle.active {
+  background: var(--rose-500);
+  color: #fff;
+}
+.calendar-day .icon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.calendar-day.ovulation {
+  background: #f3e8ff;
+  border: 1px solid #d8b4fe;
+}
+.calendar-day.ovulation::after {
+  content: '🌸';
+  position: absolute;
+  bottom: 0.1rem;
+  right: 0.1rem;
+  font-size: 0.75rem;
+}
+.settings-modal {
+  max-width: 360px;
+}
+.settings-row {
+  margin-bottom: 1rem;
+}
+.settings-row label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-600);
+  margin-bottom: 0.375rem;
+}
   </style>
 </head>
 <body>
@@ -599,6 +653,7 @@
       <h1><span class="logo">🌸</span> 姨妈助手</h1>
       <div class="user-bar" id="user-bar">
         <span id="user-identifier"></span>
+        <button id="settings-btn" class="settings-btn hidden">⚙️</button>
         <button id="logout-btn" class="btn btn-danger hidden">退出</button>
       </div>
     </header>
@@ -649,7 +704,32 @@ create policy "用户只能更新自己的记录"
 create policy "用户只能删除自己的记录"
   on public.daily_logs
   for delete
-  using (auth.uid() = user_id);</pre>
+  using (auth.uid() = user_id);
+
+  -- user_settings 表
+  create table if not exists public.user_settings (
+    user_id uuid primary key references auth.users(id) on delete cascade,
+    default_period_length integer default 7,
+    default_cycle_length integer default 28,
+    updated_at timestamptz default now()
+  );
+
+  alter table public.user_settings enable row level security;
+
+  create policy "用户只能查看自己的设置"
+    on public.user_settings
+    for select
+    using (auth.uid() = user_id);
+
+  create policy "用户只能更新自己的设置"
+    on public.user_settings
+    for update
+    using (auth.uid() = user_id);
+
+  create policy "用户只能插入自己的设置"
+    on public.user_settings
+    for insert
+    with check (auth.uid() = user_id);</pre>
       </details>
     </div>
 
@@ -685,6 +765,7 @@ create policy "用户只能删除自己的记录"
         <div class="legend-item"><div class="legend-box" style="background: var(--rose-300);"></div> 已记录经期</div>
         <div class="legend-item"><div class="legend-box" style="background: var(--rose-500);"></div> 经期开始</div>
         <div class="legend-item"><div class="legend-box" style="border: 1px dashed var(--rose-300); background: var(--rose-50);"></div> 预测经期</div>
+        <div class="legend-item"><div class="legend-box" style="background: #f3e8ff; border: 1px solid #d8b4fe;"></div> 排卵日</div>
         <div class="legend-item"><div class="legend-box legend-ring"></div> 今天</div>
       </div>
     </div>
@@ -701,9 +782,14 @@ create policy "用户只能删除自己的记录"
           </div>
         </div>
 
+        <div class="module full-width">
+          <h3>📏 来潮天数</h3>
+          <select id="input-period-length" class="input-field"></select>
+        </div>
+
         <div class="module">
           <h3>🌡️ 体温</h3>
-          <input id="input-temperature" type="number" step="0.01" class="input-field" placeholder="例如 36.5" />
+          <select id="input-temperature" class="input-field"></select>
         </div>
 
         <div class="module">
@@ -733,19 +819,35 @@ create policy "用户只能删除自己的记录"
 
         <div class="module">
           <h3>❤️ Love</h3>
-          <button id="btn-love" class="btn btn-secondary toggle-btn">记录</button>
+          <div class="module-actions">
+            <button id="btn-love" class="btn btn-secondary big-toggle">❤️</button>
+          </div>
         </div>
 
         <div class="module">
-          <h3>✨ Air / 自定义</h3>
-          <!-- Air 是自定义字段，用户可稍后重命名，用于记录运动、睡眠、空气、心情等 -->
-          <input id="input-air" type="text" class="input-field" placeholder="运动、睡眠、空气、心情" />
+          <h3>🚀 Air</h3>
+          <div class="module-actions">
+            <button id="btn-air" class="btn btn-secondary big-toggle">🚀</button>
+          </div>
         </div>
 
         <div class="module full-width">
           <h3>📝 备注</h3>
           <textarea id="input-notes" class="input-field" rows="3" placeholder="今天还有什么想记录的？"></textarea>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-overlay" class="overlay hidden">
+    <div class="modal settings-modal">
+      <h2>⚙️ 设置</h2>
+      <div class="settings-row">
+        <label for="input-cycle-length">平均周期</label>
+        <select id="input-cycle-length" class="input-field"></select>
+      </div>
+      <div class="form-actions">
+        <button id="btn-close-settings" class="btn btn-secondary">关闭</button>
       </div>
     </div>
   </div>
@@ -775,15 +877,10 @@ create policy "用户只能删除自己的记录"
   </div>
 
   <script>
-    // ============================
-    // 配置：请替换为你的 Supabase 项目凭证
-    // ============================
+    // 配置
     const SUPABASE_URL = 'https://jtittpzxdzjkdkfaugxj.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_hsXtj25cVrweKPgnvoyN_Q_Y1-EwGf4';
+    const SUPABASE_ANON_KEY = 'sb_pub…wGf4';
 
-    // ============================
-    // 应用状态
-    // ============================
     const isConfigured = SUPABASE_URL && SUPABASE_ANON_KEY &&
       !SUPABASE_URL.includes('your-project') &&
       !SUPABASE_ANON_KEY.includes('your-anon-key');
@@ -796,13 +893,20 @@ create policy "用户只能删除自己的记录"
       user: null,
       currentDate: new Date(),
       selectedDate: formatDate(new Date()),
-      logs: new Map(), // key: 'YYYY-MM-DD', value: daily log object
-      authMode: 'login', // 'login' | 'signup'
+      logs: new Map(),
+      settings: {
+        defaultPeriodLength: 7,
+        defaultCycleLength: 28,
+      },
+      authMode: 'login',
     };
 
-    const symptomsList = ['痛经', '头痛', '腹胀', '长痘', '情绪波动', '疲劳', '乳房胀痛', '腰酸'];
+    const symptomsList = ['痛经','头痛','腹胀','长痘','情绪波动','疲劳','乳房胀痛','腰酸'];
+    const temperatureOptions = [];
+    for (let t = 35.0; t <= 42.05; t += 0.1) temperatureOptions.push(t.toFixed(1));
+    const periodLengthOptions = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    const cycleLengthOptions = Array.from({length: 90}, (_, i) => i + 1);
 
-    // DOM 元素
     const els = {
       setupMessage: document.getElementById('setup-message'),
       authMessage: document.getElementById('auth-message'),
@@ -810,11 +914,15 @@ create policy "用户只能删除自己的记录"
       userBar: document.getElementById('user-bar'),
       userIdentifier: document.getElementById('user-identifier'),
       logoutBtn: document.getElementById('logout-btn'),
+      settingsBtn: document.getElementById('settings-btn'),
       authOverlay: document.getElementById('auth-overlay'),
       authForm: document.getElementById('auth-form'),
       authIdentifier: document.getElementById('auth-identifier'),
       authPassword: document.getElementById('auth-password'),
       authSubmit: document.getElementById('auth-submit'),
+      settingsOverlay: document.getElementById('settings-overlay'),
+      inputCycleLength: document.getElementById('input-cycle-length'),
+      btnCloseSettings: document.getElementById('btn-close-settings'),
       tabs: document.querySelectorAll('.tab'),
       calendarMonth: document.getElementById('calendar-month'),
       calendarGrid: document.getElementById('calendar-grid'),
@@ -825,18 +933,20 @@ create policy "用户只能删除自己的记录"
       avgCycle: document.getElementById('avg-cycle'),
       btnPeriodStart: document.getElementById('btn-period-start'),
       btnPeriodEnd: document.getElementById('btn-period-end'),
+      inputPeriodLength: document.getElementById('input-period-length'),
       inputTemperature: document.getElementById('input-temperature'),
       inputFlow: document.getElementById('input-flow'),
       symptomsGroup: document.getElementById('symptoms-group'),
       btnLove: document.getElementById('btn-love'),
-      inputAir: document.getElementById('input-air'),
+      btnAir: document.getElementById('btn-air'),
       inputNotes: document.getElementById('input-notes'),
     };
 
-    // ============================
-    // 初始化
-    // ============================
     function init() {
+      populateSelect(els.inputTemperature, temperatureOptions, '36.5');
+      populateSelect(els.inputPeriodLength, periodLengthOptions, 7);
+      populateSelect(els.inputCycleLength, cycleLengthOptions, 28);
+      renderSymptomsPills();
       if (!isConfigured) {
         els.setupMessage.classList.remove('hidden');
         els.authOverlay.classList.add('hidden');
@@ -844,11 +954,20 @@ create policy "用户只能删除自己的记录"
         els.setupMessage.classList.add('hidden');
         checkSession();
       }
-
-      renderSymptomsPills();
       renderCalendar();
       renderEditor();
       bindEvents();
+    }
+
+    function populateSelect(select, options, defaultValue) {
+      select.innerHTML = '';
+      options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = String(opt);
+        option.textContent = String(opt);
+        if (String(opt) === String(defaultValue)) option.selected = true;
+        select.appendChild(option);
+      });
     }
 
     function renderSymptomsPills() {
@@ -856,7 +975,7 @@ create policy "用户只能删除自己的记录"
       symptomsList.forEach(sym => {
         const label = document.createElement('label');
         label.className = 'checkbox-pill';
-        label.innerHTML = `<input type="checkbox" value="${sym}" />${sym}`;
+        label.innerHTML = `<input type='checkbox' value='${sym}' />${sym}`;
         label.addEventListener('change', (e) => {
           if (e.target.tagName !== 'INPUT') return;
           label.classList.toggle('checked', e.target.checked);
@@ -865,14 +984,12 @@ create policy "用户只能删除自己的记录"
       });
     }
 
-    // ============================
-    // 事件绑定
-    // ============================
     function bindEvents() {
       els.prevMonth.addEventListener('click', () => changeMonth(-1));
       els.nextMonth.addEventListener('click', () => changeMonth(1));
-
       els.logoutBtn.addEventListener('click', logout);
+      els.settingsBtn.addEventListener('click', openSettings);
+      els.btnCloseSettings.addEventListener('click', closeSettings);
 
       els.tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -888,26 +1005,11 @@ create policy "用户只能删除自己的记录"
         await authSubmit();
       });
 
-      els.btnPeriodStart.addEventListener('click', () => {
-        const log = getOrCreateLog(state.selectedDate);
-        log.is_period = !log.is_period;
-        log.period_start = log.is_period;
-        if (!log.is_period) log.period_end = false;
-        updateStateMap(log);
-        renderEditor();
-        renderCalendar();
-        saveSelectedDay();
-      });
-
-      els.btnPeriodEnd.addEventListener('click', () => {
-        const log = getOrCreateLog(state.selectedDate);
-        log.is_period = false;
-        log.period_end = true;
-        log.period_start = false;
-        updateStateMap(log);
-        renderEditor();
-        renderCalendar();
-        saveSelectedDay();
+      els.btnPeriodStart.addEventListener('click', togglePeriodStart);
+      els.btnPeriodEnd.addEventListener('click', setPeriodEnd);
+      els.inputPeriodLength.addEventListener('change', () => {
+        const length = parseInt(els.inputPeriodLength.value, 10);
+        adjustPeriodLength(state.selectedDate, length);
       });
 
       els.btnLove.addEventListener('click', () => {
@@ -919,23 +1021,252 @@ create policy "用户只能删除自己的记录"
         saveSelectedDay();
       });
 
-      [els.inputTemperature, els.inputFlow, els.inputAir, els.inputNotes].forEach(el => {
+      els.btnAir.addEventListener('click', () => {
+        const log = getOrCreateLog(state.selectedDate);
+        log.air = log.air ? '' : '🚀';
+        updateStateMap(log);
+        renderEditor();
+        renderCalendar();
+        saveSelectedDay();
+      });
+
+      [els.inputTemperature, els.inputFlow, els.inputNotes].forEach(el => {
         el.addEventListener('change', () => {
           const log = getOrCreateLog(state.selectedDate);
           if (el === els.inputTemperature) log.temperature = parseFloat(el.value) || null;
           if (el === els.inputFlow) log.flow = el.value || null;
-          if (el === els.inputAir) log.air = el.value || null;
           if (el === els.inputNotes) log.notes = el.value || null;
           updateStateMap(log);
           renderCalendar();
           saveSelectedDay();
         });
       });
+
+      els.inputCycleLength.addEventListener('change', () => {
+        state.settings.defaultCycleLength = parseInt(els.inputCycleLength.value, 10);
+        saveSettings();
+        renderCalendar();
+        updateStats();
+      });
+
+      els.symptomsGroup.addEventListener('change', () => {
+        const checked = Array.from(els.symptomsGroup.querySelectorAll('input:checked')).map(cb => cb.value);
+        const log = getOrCreateLog(state.selectedDate);
+        log.symptoms = checked;
+        updateStateMap(log);
+        renderCalendar();
+        saveSelectedDay();
+      });
     }
 
-    // ============================
-    // 认证
-    // ============================
+    function findPeriodRange(date) {
+      const log = state.logs.get(date);
+      if (!log || (!log.is_period && !log.period_start)) return null;
+      let start = date;
+      while (true) {
+        const prev = addDays(start, -1);
+        const prevLog = state.logs.get(prev);
+        if (!prevLog || !prevLog.is_period) break;
+        if (prevLog.period_start) { start = prev; break; }
+        start = prev;
+      }
+      let end = date;
+      while (true) {
+        const next = addDays(end, 1);
+        const nextLog = state.logs.get(next);
+        if (!nextLog || !nextLog.is_period) break;
+        if (nextLog.period_end) { end = next; break; }
+        end = next;
+      }
+      return { start, end };
+    }
+
+    function getPeriodStart(date) {
+      const range = findPeriodRange(date);
+      return range ? range.start : null;
+    }
+
+    function setPeriodRange(start, end) {
+      if (start > end) return;
+      for (let d = start; d <= end; d = addDays(d, 1)) {
+        const log = getOrCreateLog(d);
+        log.is_period = true;
+        log.period_start = d === start;
+        log.period_end = d === end;
+      }
+    }
+
+    async function togglePeriodStart() {
+      const date = state.selectedDate;
+      const range = findPeriodRange(date);
+      if (range && range.start === date) {
+        await removePeriodRange(range.start, range.end);
+      } else {
+        const length = state.settings.defaultPeriodLength;
+        const end = addDays(date, length - 1);
+        await removeOverlappingPeriods(date, end);
+        setPeriodRange(date, end);
+        await savePeriodRange(date, end);
+      }
+      renderCalendar();
+      renderEditor();
+      updateStats();
+    }
+
+    async function setPeriodEnd() {
+      const date = state.selectedDate;
+      const start = getPeriodStart(date);
+      if (!start || date < start) return;
+      const oldRange = findPeriodRange(start);
+      if (oldRange) {
+        for (let d = addDays(date, 1); d <= oldRange.end; d = addDays(d, 1)) {
+          const log = state.logs.get(d);
+          if (log) {
+            log.is_period = false;
+            log.period_start = false;
+            log.period_end = false;
+          }
+        }
+      }
+      setPeriodRange(start, date);
+      await savePeriodRange(start, date);
+      renderCalendar();
+      renderEditor();
+      updateStats();
+    }
+
+    async function adjustPeriodLength(date, length) {
+      const start = getPeriodStart(date);
+      if (!start) {
+        state.settings.defaultPeriodLength = length;
+        await saveSettings();
+        renderEditor();
+        return;
+      }
+      const oldRange = findPeriodRange(start);
+      const newEnd = addDays(start, length - 1);
+      if (newEnd > oldRange.end) {
+        setPeriodRange(start, newEnd);
+      } else {
+        for (let d = addDays(newEnd, 1); d <= oldRange.end; d = addDays(d, 1)) {
+          const log = state.logs.get(d);
+          if (log) {
+            log.is_period = false;
+            log.period_start = false;
+            log.period_end = false;
+          }
+        }
+        setPeriodRange(start, newEnd);
+      }
+      state.settings.defaultPeriodLength = length;
+      await Promise.all([savePeriodRange(start, newEnd), saveSettings()]);
+      renderCalendar();
+      renderEditor();
+      updateStats();
+    }
+
+    async function removeOverlappingPeriods(start, end) {
+      for (let d = start; d <= end; d = addDays(d, 1)) {
+        const range = findPeriodRange(d);
+        if (range) await removePeriodRange(range.start, range.end);
+      }
+    }
+
+    async function removePeriodRange(start, end) {
+      for (let d = start; d <= end; d = addDays(d, 1)) {
+        const log = state.logs.get(d);
+        if (log) {
+          log.is_period = false;
+          log.period_start = false;
+          log.period_end = false;
+        }
+      }
+      await savePeriodRange(start, end);
+    }
+
+    async function savePeriodRange(start, end) {
+      if (!supabaseClient || !state.user) return;
+      for (let d = start; d <= end; d = addDays(d, 1)) {
+        const log = state.logs.get(d) || createEmptyLog(d);
+        await saveLog(log);
+      }
+    }
+
+    async function saveSelectedDay() {
+      const log = getOrCreateLog(state.selectedDate);
+      await saveLog(log);
+      updateStats();
+    }
+
+    async function saveLog(log) {
+      if (!supabaseClient || !state.user) return;
+      const payload = {
+        user_id: state.user.id,
+        date: log.date,
+        is_period: log.is_period,
+        period_start: log.period_start,
+        period_end: log.period_end,
+        flow: log.flow,
+        temperature: log.temperature,
+        symptoms: log.symptoms || [],
+        love: log.love,
+        air: log.air,
+        notes: log.notes,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabaseClient
+        .from('daily_logs')
+        .upsert(payload, { onConflict: 'user_id,date' });
+      if (error) showStatus('保存失败：' + error.message, 'error');
+    }
+
+    async function fetchLogs() {
+      if (!supabaseClient || !state.user) return;
+      const { data, error } = await supabaseClient
+        .from('daily_logs')
+        .select('*')
+        .eq('user_id', state.user.id);
+      if (error) {
+        showStatus('读取记录失败：' + error.message, 'error');
+        return;
+      }
+      state.logs.clear();
+      (data || []).forEach(log => state.logs.set(log.date, normalizeLog(log)));
+      renderCalendar();
+      renderEditor();
+      updateStats();
+    }
+
+    async function loadSettings() {
+      if (!supabaseClient || !state.user) return;
+      const { data, error } = await supabaseClient
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', state.user.id)
+        .single();
+      if (data) {
+        state.settings.defaultPeriodLength = data.default_period_length || 7;
+        state.settings.defaultCycleLength = data.default_cycle_length || 28;
+      }
+      populateSelect(els.inputPeriodLength, periodLengthOptions, state.settings.defaultPeriodLength);
+      populateSelect(els.inputCycleLength, cycleLengthOptions, state.settings.defaultCycleLength);
+      renderEditor();
+    }
+
+    async function saveSettings() {
+      if (!supabaseClient || !state.user) return;
+      const payload = {
+        user_id: state.user.id,
+        default_period_length: state.settings.defaultPeriodLength,
+        default_cycle_length: state.settings.defaultCycleLength,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabaseClient
+        .from('user_settings')
+        .upsert(payload, { onConflict: 'user_id' });
+      if (error) showStatus('保存设置失败：' + error.message, 'error');
+    }
+
     async function checkSession() {
       if (!supabaseClient) return;
       const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -957,12 +1288,12 @@ create policy "用户只能删除自己的记录"
     function toEmail(identifier) {
       identifier = identifier.trim().toLowerCase();
       if (identifier.includes('@')) return identifier;
-      return `${identifier}@${AUTH_DOMAIN}`;
+      return identifier + '@' + AUTH_DOMAIN;
     }
 
     function toDisplayIdentifier(email) {
       if (!email) return '';
-      return email.endsWith(`@${AUTH_DOMAIN}`) ? email.replace(`@${AUTH_DOMAIN}`, '') : email;
+      return email.endsWith('@' + AUTH_DOMAIN) ? email.replace('@' + AUTH_DOMAIN, '') : email;
     }
 
     async function authSubmit() {
@@ -996,6 +1327,7 @@ create policy "用户只能删除自己的记录"
       state.logs.clear();
       els.authOverlay.classList.remove('hidden');
       els.logoutBtn.classList.add('hidden');
+      els.settingsBtn.classList.add('hidden');
       els.userIdentifier.textContent = '';
       els.authMessage.classList.add('hidden');
       renderCalendar();
@@ -1006,63 +1338,207 @@ create policy "用户只能删除自己的记录"
     function onAuthSuccess() {
       els.authOverlay.classList.add('hidden');
       els.logoutBtn.classList.remove('hidden');
+      els.settingsBtn.classList.remove('hidden');
       els.userIdentifier.textContent = toDisplayIdentifier(state.user?.email || '');
       els.authMessage.classList.remove('hidden');
+      loadSettings();
       fetchLogs();
+    }
+
+    function openSettings() {
+      els.settingsOverlay.classList.remove('hidden');
+    }
+
+    function closeSettings() {
+      els.settingsOverlay.classList.add('hidden');
     }
 
     function setAuthLoading(loading) {
       els.authSubmit.disabled = loading;
-      els.authSubmit.innerHTML = loading ? '<span class="spinner"></span>' : (state.authMode === 'login' ? '登录' : '注册');
+      els.authSubmit.innerHTML = loading ? `<span class='spinner'></span>` : (state.authMode === 'login' ? '登录' : '注册');
     }
 
-    // ============================
-    // 数据获取与保存
-    // ============================
-    async function fetchLogs() {
-      if (!supabaseClient || !state.user) return;
-      const { data, error } = await supabaseClient
-        .from('daily_logs')
-        .select('*')
-        .eq('user_id', state.user.id);
-      if (error) {
-        showStatus('读取记录失败：' + error.message, 'error');
+    function changeMonth(delta) {
+      const y = state.currentDate.getFullYear();
+      const m = state.currentDate.getMonth();
+      state.currentDate = new Date(y, m + delta, 1);
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const year = state.currentDate.getFullYear();
+      const month = state.currentDate.getMonth();
+      els.calendarMonth.textContent = year + '年 ' + (month + 1) + '月';
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startOffset = firstDay.getDay();
+      const daysInMonth = lastDay.getDate();
+      const prevMonthDays = new Date(year, month, 0).getDate();
+      const today = formatDate(new Date());
+
+      const predictedPeriod = buildPredictedPeriodSet();
+      const ovulation = buildOvulationSet();
+
+      els.calendarGrid.innerHTML = '';
+
+      const weekdays = ['日','一','二','三','四','五','六'];
+      weekdays.forEach(day => {
+        const el = document.createElement('div');
+        el.className = 'weekday-label';
+        el.textContent = day;
+        els.calendarGrid.appendChild(el);
+      });
+
+      for (let i = startOffset - 1; i >= 0; i--) {
+        const day = prevMonthDays - i;
+        const date = formatDate(new Date(year, month - 1, day));
+        els.calendarGrid.appendChild(createDayCell(date, day, true, today, predictedPeriod, ovulation));
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = formatDate(new Date(year, month, day));
+        els.calendarGrid.appendChild(createDayCell(date, day, false, today, predictedPeriod, ovulation));
+      }
+
+      const remaining = (7 - ((startOffset + daysInMonth) % 7)) % 7;
+      for (let day = 1; day <= remaining; day++) {
+        const date = formatDate(new Date(year, month + 1, day));
+        els.calendarGrid.appendChild(createDayCell(date, day, true, today, predictedPeriod, ovulation));
+      }
+    }
+
+    function createDayCell(date, day, otherMonth, today, predictedPeriod, ovulation) {
+      const log = state.logs.get(date) || createEmptyLog(date);
+      const cell = document.createElement('div');
+      cell.className = 'calendar-day';
+      if (otherMonth) cell.classList.add('other-month');
+      if (date === state.selectedDate) cell.classList.add('selected');
+      if (date === today) cell.classList.add('today');
+      if (predictedPeriod.has(date)) cell.classList.add('predicted');
+      if (ovulation.has(date)) cell.classList.add('ovulation');
+      if (log.is_period) cell.classList.add('period');
+      if (log.period_start) cell.classList.add('period-start');
+
+      const number = document.createElement('div');
+      number.className = 'day-number';
+      number.textContent = day;
+      cell.appendChild(number);
+
+      const indicators = document.createElement('div');
+      indicators.className = 'indicators';
+      if (log.temperature) indicators.appendChild(createDot('temperature'));
+      if (log.symptoms && log.symptoms.length) indicators.appendChild(createDot('symptoms'));
+      if (log.love) { const heart = document.createElement('span'); heart.className = 'icon'; heart.textContent = '❤️'; indicators.appendChild(heart); }
+      if (log.air) { const rocket = document.createElement('span'); rocket.className = 'icon'; rocket.textContent = '🚀'; indicators.appendChild(rocket); }
+      cell.appendChild(indicators);
+
+      cell.addEventListener('click', () => {
+        state.selectedDate = date;
+        renderCalendar();
+        renderEditor();
+      });
+
+      return cell;
+    }
+
+    function createDot(type) {
+      const dot = document.createElement('div');
+      dot.className = 'dot dot-' + type;
+      return dot;
+    }
+
+    function renderEditor() {
+      const date = state.selectedDate;
+      const [y, m, d] = date.split('-').map(Number);
+      els.selectedDate.textContent = y + '年' + m + '月' + d + '日';
+
+      const log = getOrCreateLog(date);
+
+      const range = findPeriodRange(date);
+      const periodLength = range ? diffDays(range.start, range.end) + 1 : state.settings.defaultPeriodLength;
+      els.inputPeriodLength.value = String(periodLength);
+
+      els.btnPeriodStart.classList.toggle('active', log.period_start);
+      els.btnPeriodEnd.classList.toggle('active', log.period_end);
+      els.inputTemperature.value = String(log.temperature ?? '36.5');
+      els.inputFlow.value = log.flow || '';
+      els.btnLove.classList.toggle('active', log.love);
+      els.btnAir.classList.toggle('active', !!log.air);
+      els.inputNotes.value = log.notes || '';
+
+      const pills = els.symptomsGroup.querySelectorAll('.checkbox-pill');
+      pills.forEach(pill => {
+        const cb = pill.querySelector('input');
+        cb.checked = (log.symptoms || []).includes(cb.value);
+        pill.classList.toggle('checked', cb.checked);
+      });
+    }
+
+    function buildPredictedPeriodSet() {
+      const set = new Set();
+      const starts = getPeriodStartDates();
+      if (!starts.length) return set;
+      const lastStart = starts[0];
+      const nextStart = addDays(lastStart, state.settings.defaultCycleLength);
+      const length = state.settings.defaultPeriodLength;
+      for (let i = 0; i < length; i++) set.add(addDays(nextStart, i));
+      return set;
+    }
+
+    function buildOvulationSet() {
+      const set = new Set();
+      const starts = getPeriodStartDates();
+      if (!starts.length) return set;
+      const lastStart = starts[0];
+      const nextStart = addDays(lastStart, state.settings.defaultCycleLength);
+      set.add(addDays(nextStart, -14));
+      return set;
+    }
+
+    function updateStats() {
+      const starts = getPeriodStartDates();
+      if (!starts.length) {
+        els.predictedNext.textContent = '--';
+        els.avgCycle.textContent = state.settings.defaultCycleLength + ' 天';
         return;
       }
-      state.logs.clear();
-      (data || []).forEach(log => {
-        state.logs.set(log.date, normalizeLog(log));
-      });
-      renderCalendar();
-      renderEditor();
-      updateStats();
+      const lastStart = starts[0];
+      const nextStart = addDays(lastStart, state.settings.defaultCycleLength);
+      els.predictedNext.textContent = formatDisplayDate(nextStart);
+      els.avgCycle.textContent = state.settings.defaultCycleLength + ' 天';
     }
 
-    async function saveSelectedDay() {
-      if (!supabaseClient || !state.user) return;
-      const log = state.logs.get(state.selectedDate) || createEmptyLog(state.selectedDate);
-      const payload = {
-        user_id: state.user.id,
-        date: log.date,
-        is_period: log.is_period,
-        period_start: log.period_start,
-        period_end: log.period_end,
-        flow: log.flow,
-        temperature: log.temperature,
-        symptoms: log.symptoms || [],
-        love: log.love,
-        air: log.air,
-        notes: log.notes,
-        updated_at: new Date().toISOString(),
-      };
-      const { error } = await supabaseClient
-        .from('daily_logs')
-        .upsert(payload, { onConflict: 'user_id,date' });
-      if (error) {
-        showStatus('保存失败：' + error.message, 'error');
-      } else {
-        updateStats();
-      }
+    function getPeriodStartDates() {
+      const dates = [];
+      state.logs.forEach(log => {
+        if (log.period_start && log.date) dates.push(log.date);
+      });
+      return dates.sort().reverse();
+    }
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + d;
+    }
+
+    function formatDisplayDate(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return m + '月' + d + '日';
+    }
+
+    function addDays(dateStr, n) {
+      const d = new Date(dateStr + 'T00:00:00');
+      d.setDate(d.getDate() + n);
+      return formatDate(d);
+    }
+
+    function diffDays(a, b) {
+      const da = new Date(a + 'T00:00:00');
+      const db = new Date(b + 'T00:00:00');
+      return Math.round((db - da) / (1000 * 60 * 60 * 24));
     }
 
     function createEmptyLog(date) {
@@ -1075,7 +1551,7 @@ create policy "用户只能删除自己的记录"
         temperature: null,
         symptoms: [],
         love: false,
-        air: null,
+        air: '',
         notes: null,
       };
     }
@@ -1099,225 +1575,16 @@ create policy "用户只能删除自己的记录"
       state.logs.set(log.date, log);
     }
 
-    // ============================
-    // 日历
-    // ============================
-    function changeMonth(delta) {
-      const y = state.currentDate.getFullYear();
-      const m = state.currentDate.getMonth();
-      state.currentDate = new Date(y, m + delta, 1);
-      renderCalendar();
-    }
-
-    function renderCalendar() {
-      const year = state.currentDate.getFullYear();
-      const month = state.currentDate.getMonth();
-      els.calendarMonth.textContent = `${year}年 ${month + 1}月`;
-
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-      const startOffset = firstDay.getDay(); // 0=Sun
-      const daysInMonth = lastDay.getDate();
-      const prevMonthDays = new Date(year, month, 0).getDate();
-      const today = formatDate(new Date());
-
-      const predictedSet = buildPredictedSet();
-
-      els.calendarGrid.innerHTML = '';
-
-      const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-      weekdays.forEach(day => {
-        const el = document.createElement('div');
-        el.className = 'weekday-label';
-        el.textContent = day;
-        els.calendarGrid.appendChild(el);
-      });
-
-      // 上月填充
-      for (let i = startOffset - 1; i >= 0; i--) {
-        const day = prevMonthDays - i;
-        const date = formatDate(new Date(year, month - 1, day));
-        els.calendarGrid.appendChild(createDayCell(date, day, true));
-      }
-
-      // 当月
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = formatDate(new Date(year, month, day));
-        els.calendarGrid.appendChild(createDayCell(date, day, false, today, predictedSet));
-      }
-
-      // 下月填充
-      const remaining = (7 - ((startOffset + daysInMonth) % 7)) % 7;
-      for (let day = 1; day <= remaining; day++) {
-        const date = formatDate(new Date(year, month + 1, day));
-        els.calendarGrid.appendChild(createDayCell(date, day, true));
-      }
-    }
-
-    function createDayCell(date, day, otherMonth, today, predictedSet) {
-      const log = state.logs.get(date) || createEmptyLog(date);
-      const cell = document.createElement('div');
-      cell.className = 'calendar-day';
-      if (otherMonth) cell.classList.add('other-month');
-      if (date === state.selectedDate) cell.classList.add('selected');
-      if (date === today) cell.classList.add('today');
-      if (predictedSet && predictedSet.has(date)) cell.classList.add('predicted');
-      if (log.is_period) cell.classList.add('period');
-      if (log.period_start) cell.classList.add('period-start');
-
-      const number = document.createElement('div');
-      number.className = 'day-number';
-      number.textContent = day;
-      cell.appendChild(number);
-
-      const indicators = document.createElement('div');
-      indicators.className = 'indicators';
-      if (log.temperature) indicators.appendChild(createDot('temperature'));
-      if (log.symptoms && log.symptoms.length) indicators.appendChild(createDot('symptoms'));
-      if (log.love) indicators.appendChild(createDot('love'));
-      if (log.air) indicators.appendChild(createDot('air'));
-      cell.appendChild(indicators);
-
-      cell.addEventListener('click', () => {
-        state.selectedDate = date;
-        renderCalendar();
-        renderEditor();
-      });
-
-      return cell;
-    }
-
-    function createDot(type) {
-      const dot = document.createElement('div');
-      dot.className = `dot dot-${type}`;
-      return dot;
-    }
-
-    // ============================
-    // 编辑器
-    // ============================
-    function renderEditor() {
-      const date = state.selectedDate;
-      const [y, m, d] = date.split('-').map(Number);
-      els.selectedDate.textContent = `${y}年${m}月${d}日`;
-
-      const log = getOrCreateLog(date);
-
-      els.btnPeriodStart.classList.toggle('active', log.is_period || log.period_start);
-      els.btnPeriodEnd.classList.toggle('active', log.period_end);
-      els.inputTemperature.value = log.temperature ?? '';
-      els.inputFlow.value = log.flow || '';
-      els.btnLove.classList.toggle('active', log.love);
-      els.inputAir.value = log.air || '';
-      els.inputNotes.value = log.notes || '';
-
-      const pills = els.symptomsGroup.querySelectorAll('.checkbox-pill');
-      pills.forEach(pill => {
-        const cb = pill.querySelector('input');
-        cb.checked = (log.symptoms || []).includes(cb.value);
-        pill.classList.toggle('checked', cb.checked);
-      });
-    }
-
-    // 症状 checkbox 绑定保存
-    els.symptomsGroup.addEventListener('change', () => {
-      const checked = Array.from(els.symptomsGroup.querySelectorAll('input:checked')).map(cb => cb.value);
-      const log = getOrCreateLog(state.selectedDate);
-      log.symptoms = checked;
-      updateStateMap(log);
-      renderCalendar();
-      saveSelectedDay();
-    });
-
-    // ============================
-    // 预测
-    // ============================
-    function buildPredictedSet() {
-      const predictedSet = new Set();
-      const starts = getPeriodStartDates();
-      if (starts.length < 1) return predictedSet;
-      const avg = averageCycleLength(starts);
-      const lastStart = starts[0];
-      const nextStart = addDays(lastStart, avg);
-      for (let i = 0; i < 5; i++) {
-        predictedSet.add(addDays(nextStart, i));
-      }
-      return predictedSet;
-    }
-
-    function updateStats() {
-      const starts = getPeriodStartDates();
-      if (starts.length < 1) {
-        els.predictedNext.textContent = '--';
-        els.avgCycle.textContent = '-- 天';
-        return;
-      }
-      const avg = averageCycleLength(starts);
-      const lastStart = starts[0];
-      const nextStart = addDays(lastStart, avg);
-      els.predictedNext.textContent = formatDisplayDate(nextStart);
-      els.avgCycle.textContent = `${Math.round(avg)} 天`;
-    }
-
-    function getPeriodStartDates() {
-      const dates = [];
-      state.logs.forEach(log => {
-        if (log.period_start && log.date) dates.push(log.date);
-      });
-      return dates.sort().reverse();
-    }
-
-    function averageCycleLength(sortedStartsDesc) {
-      if (sortedStartsDesc.length < 2) return 28;
-      let total = 0;
-      let count = 0;
-      for (let i = 0; i < sortedStartsDesc.length - 1; i++) {
-        const days = diffDays(sortedStartsDesc[i + 1], sortedStartsDesc[i]);
-        if (days > 0 && days < 90) {
-          total += days;
-          count++;
-        }
-      }
-      return count > 0 ? total / count : 28;
-    }
-
-    // ============================
-    // 工具函数
-    // ============================
-    function formatDate(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-
-    function formatDisplayDate(dateStr) {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      return `${m}月${d}日`;
-    }
-
-    function addDays(dateStr, n) {
-      const d = new Date(dateStr + 'T00:00:00');
-      d.setDate(d.getDate() + n);
-      return formatDate(d);
-    }
-
-    function diffDays(a, b) {
-      const da = new Date(a + 'T00:00:00');
-      const db = new Date(b + 'T00:00:00');
-      return Math.round((db - da) / (1000 * 60 * 60 * 24));
-    }
-
     function showStatus(message, type) {
       els.statusMessage.textContent = message;
-      els.statusMessage.className = `message ${type}`;
+      els.statusMessage.className = 'message ' + type;
       setTimeout(() => {
         els.statusMessage.className = 'message hidden';
       }, 4000);
     }
 
-    // 启动
     init();
+
   </script>
 
   <!--
