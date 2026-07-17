@@ -598,7 +598,7 @@
     <header>
       <h1><span class="logo">🌸</span> 姨妈助手</h1>
       <div class="user-bar" id="user-bar">
-        <span id="user-email"></span>
+        <span id="user-identifier"></span>
         <button id="logout-btn" class="btn btn-danger hidden">退出</button>
       </div>
     </header>
@@ -753,15 +753,15 @@ create policy "用户只能删除自己的记录"
   <div id="auth-overlay" class="overlay">
     <div class="modal">
       <h2>🔐 登录 / 注册</h2>
-      <p>使用邮箱和密码登录或注册新账号</p>
+      <p>使用账号和密码登录或注册（支持任意用户名，也可直接填邮箱）</p>
       <div class="tabs">
         <button class="tab active" data-mode="login">登录</button>
         <button class="tab" data-mode="signup">注册</button>
       </div>
       <form id="auth-form">
         <div class="form-group">
-          <label for="auth-email">邮箱</label>
-          <input id="auth-email" type="email" class="input-field" placeholder="you@example.com" required />
+          <label for="auth-identifier">账号 / 用户名</label>
+          <input id="auth-identifier" type="text" class="input-field" placeholder="任意用户名，如 lysam01" required />
         </div>
         <div class="form-group">
           <label for="auth-password">密码</label>
@@ -808,11 +808,11 @@ create policy "用户只能删除自己的记录"
       authMessage: document.getElementById('auth-message'),
       statusMessage: document.getElementById('status-message'),
       userBar: document.getElementById('user-bar'),
-      userEmail: document.getElementById('user-email'),
+      userIdentifier: document.getElementById('user-identifier'),
       logoutBtn: document.getElementById('logout-btn'),
       authOverlay: document.getElementById('auth-overlay'),
       authForm: document.getElementById('auth-form'),
-      authEmail: document.getElementById('auth-email'),
+      authIdentifier: document.getElementById('auth-identifier'),
       authPassword: document.getElementById('auth-password'),
       authSubmit: document.getElementById('auth-submit'),
       tabs: document.querySelectorAll('.tab'),
@@ -952,10 +952,24 @@ create policy "用户只能删除自己的记录"
       }
     }
 
+    const AUTH_DOMAIN = 'hub-public.local';
+
+    function toEmail(identifier) {
+      identifier = identifier.trim().toLowerCase();
+      if (identifier.includes('@')) return identifier;
+      return `${identifier}@${AUTH_DOMAIN}`;
+    }
+
+    function toDisplayIdentifier(email) {
+      if (!email) return '';
+      return email.endsWith(`@${AUTH_DOMAIN}`) ? email.replace(`@${AUTH_DOMAIN}`, '') : email;
+    }
+
     async function authSubmit() {
-      const email = els.authEmail.value.trim();
+      const identifier = els.authIdentifier.value.trim();
       const password = els.authPassword.value;
-      if (!email || !password) return;
+      const email = toEmail(identifier);
+      if (!identifier || !password) return;
 
       setAuthLoading(true);
       try {
@@ -982,7 +996,7 @@ create policy "用户只能删除自己的记录"
       state.logs.clear();
       els.authOverlay.classList.remove('hidden');
       els.logoutBtn.classList.add('hidden');
-      els.userEmail.textContent = '';
+      els.userIdentifier.textContent = '';
       els.authMessage.classList.add('hidden');
       renderCalendar();
       renderEditor();
@@ -992,7 +1006,7 @@ create policy "用户只能删除自己的记录"
     function onAuthSuccess() {
       els.authOverlay.classList.add('hidden');
       els.logoutBtn.classList.remove('hidden');
-      els.userEmail.textContent = state.user?.email || '';
+      els.userIdentifier.textContent = toDisplayIdentifier(state.user?.email || '');
       els.authMessage.classList.remove('hidden');
       fetchLogs();
     }
