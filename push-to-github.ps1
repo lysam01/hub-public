@@ -3,7 +3,7 @@ param(
   [string]$Repo = 'hub-public'
 )
 
-$secureToken = Read-Host -Prompt "请输入 GitHub Classic PAT（以 ghp_ 开头，输入时不会显示）" -AsSecureText
+$secureToken = Read-Host -Prompt "请输入 GitHub Classic PAT（以 ghp_ 开头，输入时不会显示）" -AsSecureString
 $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
   [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
 )
